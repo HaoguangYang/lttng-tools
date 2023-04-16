@@ -8,18 +8,17 @@
 #ifndef LTTNG_EXCEPTION_H_
 #define LTTNG_EXCEPTION_H_
 
-#include <string>
-#include <stdexcept>
-#include <system_error>
-
 #include <lttng/lttng-error.h>
 
-#define LTTNG_THROW_CTL(error_code) \
+#include <stdexcept>
+#include <string>
+#include <system_error>
+
+#define LTTNG_THROW_CTL(msg, error_code) \
 	throw lttng::ctl::error(msg, error_code, __FILE__, __func__, __LINE__)
 #define LTTNG_THROW_POSIX(msg, errno_code) \
 	throw lttng::posix_error(msg, errno_code, __FILE__, __func__, __LINE__)
-#define LTTNG_THROW_ERROR(msg) \
-	throw lttng::runtime_error(msg, __FILE__, __func__, __LINE__)
+#define LTTNG_THROW_ERROR(msg) throw lttng::runtime_error(msg, __FILE__, __func__, __LINE__)
 #define LTTNG_THROW_UNSUPPORTED_ERROR(msg) \
 	throw lttng::runtime_error(msg, __FILE__, __func__, __LINE__)
 #define LTTNG_THROW_COMMUNICATION_ERROR(msg) \
@@ -33,27 +32,28 @@ namespace lttng {
 class runtime_error : public std::runtime_error {
 public:
 	explicit runtime_error(const std::string& msg,
-			const char *file_name,
-			const char *function_name,
-			unsigned int line_number);
+			       const char *file_name,
+			       const char *function_name,
+			       unsigned int line_number);
 };
 
 class unsupported_error : public std::runtime_error {
 public:
 	explicit unsupported_error(const std::string& msg,
-			const char *file_name,
-			const char *function_name,
-			unsigned int line_number);
+				   const char *file_name,
+				   const char *function_name,
+				   unsigned int line_number);
 };
 
 namespace ctl {
 /* Wrap lttng_error_code errors which may be reported through liblttng-ctl's interface. */
 class error : public runtime_error {
 public:
-	explicit error(lttng_error_code error_code,
-			const char *file_name,
-			const char *function_name,
-			unsigned int line_number);
+	explicit error(const std::string& msg,
+		       lttng_error_code error_code,
+		       const char *file_name,
+		       const char *function_name,
+		       unsigned int line_number);
 
 	lttng_error_code code() const noexcept
 	{
@@ -68,34 +68,34 @@ private:
 class posix_error : public std::system_error {
 public:
 	explicit posix_error(const std::string& msg,
-			int errno_code,
-			const char *file_name,
-			const char *function_name,
-			unsigned int line_number);
+			     int errno_code,
+			     const char *file_name,
+			     const char *function_name,
+			     unsigned int line_number);
 };
 
 class communication_error : public runtime_error {
 public:
 	explicit communication_error(const std::string& msg,
-			const char *file_name,
-			const char *function_name,
-			unsigned int line_number);
+				     const char *file_name,
+				     const char *function_name,
+				     unsigned int line_number);
 };
 
 class protocol_error : public communication_error {
 public:
 	explicit protocol_error(const std::string& msg,
-			const char *file_name,
-			const char *function_name,
-			unsigned int line_number);
+				const char *file_name,
+				const char *function_name,
+				unsigned int line_number);
 };
 
 class invalid_argument_error : public runtime_error {
 public:
 	explicit invalid_argument_error(const std::string& msg,
-			const char *file_name,
-			const char *function_name,
-			unsigned int line_number);
+					const char *file_name,
+					const char *function_name,
+					unsigned int line_number);
 };
 
 }; /* namespace lttng */

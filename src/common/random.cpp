@@ -5,6 +5,7 @@
  *
  */
 
+#include <common/error.hpp>
 #include <common/file-descriptor.hpp>
 #include <common/format.hpp>
 #include <common/hashtable/utils.hpp>
@@ -72,9 +73,8 @@ void getrandom_nonblock(char *out_data, std::size_t size)
 	}
 }
 #else /* defined(__linux__) && defined(SYS_getrandom) && defined(HAVE_SYS_RANDOM_H) */
-__attribute__((noreturn))
-void getrandom_nonblock(char *out_data __attribute__((unused)),
-		std::size_t size __attribute__((unused)))
+__attribute__((noreturn)) void getrandom_nonblock(char *out_data __attribute__((unused)),
+						  std::size_t size __attribute__((unused)))
 {
 	LTTNG_THROW_RANDOM_PRODUCTION_ERROR("getrandom() is not supported by this platform");
 }
@@ -138,11 +138,11 @@ lttng::random::seed_t produce_random_seed_from_urandom()
 	}() };
 
 	lttng::random::seed_t seed;
-	const auto read_ret = lttng_read(urandom.fd(), &seed, sizeof(seed));
-	if (read_ret != sizeof(seed)) {
-		LTTNG_THROW_POSIX(fmt::format("Failed to read from `/dev/urandom`: size={}",
-					      sizeof(seed)),
-				  errno);
+	try {
+		urandom.read(&seed, sizeof(seed));
+	} catch (const std::exception& e) {
+		LTTNG_THROW_RANDOM_PRODUCTION_ERROR(fmt::format(
+			"Failed to read from `/dev/urandom`: size={}: {}", sizeof(seed), e.what()));
 	}
 
 	return seed;

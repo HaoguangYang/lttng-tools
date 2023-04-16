@@ -5,60 +5,52 @@
  *
  */
 
-#include <common/error.hpp>
-#include <common/format.hpp>
+#ifndef LTTNG_FILE_DESCRIPTOR_HPP
+#define LTTNG_FILE_DESCRIPTOR_HPP
 
-#include <algorithm>
-
-#include <unistd.h>
+#include <cstddef>
 
 namespace lttng {
 
-/*
- * RAII wrapper around a UNIX file descriptor. A file_descriptor's underlying
- * file descriptor
- */
+/* RAII wrapper around a UNIX file descriptor. */
 class file_descriptor {
 public:
-	explicit file_descriptor(int raw_fd) noexcept : _raw_fd{raw_fd}
-	{
-		LTTNG_ASSERT(_is_valid_fd(_raw_fd));
-	}
+	file_descriptor() noexcept;
 
+	explicit file_descriptor(int raw_fd) noexcept;
 	file_descriptor(const file_descriptor&) = delete;
 	file_descriptor& operator=(const file_descriptor&) = delete;
-	file_descriptor& operator=(file_descriptor&&) = delete;
 
-	file_descriptor(file_descriptor&& other) noexcept {
-		LTTNG_ASSERT(_is_valid_fd(_raw_fd));
-		std::swap(_raw_fd, other._raw_fd);
-	}
+	file_descriptor(file_descriptor&& other) noexcept;
 
-	~file_descriptor()
-	{
-		if (!_is_valid_fd(_raw_fd)) {
-			return;
-		}
+	file_descriptor& operator=(file_descriptor&& other) noexcept;
 
-		const auto ret = ::close(_raw_fd);
-		if (ret) {
-			PERROR("Failed to close file descriptor: fd=%i", _raw_fd);
-		}
-	}
+	~file_descriptor() noexcept;
 
-	int fd() const noexcept
-	{
-		LTTNG_ASSERT(_is_valid_fd(_raw_fd));
-		return _raw_fd;
-	}
+	/*
+	 * Read `size` bytes from the underlying file descriptor, assuming
+	 * raw_fd behaves as a blocking device.
+	 *
+	 * Throws an exception if the requested amount of bytes couldn't be read.
+	 */
+	void read(void *buffer, std::size_t size);
+	/*
+	 * Write `size` bytes to the underlying file descriptor, assuming
+	 * raw_fd behaves as a blocking device.
+	 *
+	 * Throws an exception if the requested amount of bytes couldn't be written.
+	 */
+	void write(const void *buffer, std::size_t size);
+
+	int fd() const noexcept;
+
+protected:
+	void _cleanup() noexcept;
 
 private:
-	static bool _is_valid_fd(int fd)
-	{
-		return fd >= 0;
-	}
-
 	int _raw_fd = -1;
 };
 
 } /* namespace lttng */
+
+#endif /* LTTNG_FILE_DESCRIPTOR_HPP */

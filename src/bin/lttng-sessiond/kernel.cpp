@@ -16,7 +16,6 @@
 #include "lttng-syscall.hpp"
 #include "modprobe.hpp"
 #include "notification-thread-commands.hpp"
-#include "rotate.hpp"
 #include "sessiond-config.hpp"
 #include "tracker.hpp"
 #include "utils.hpp"
@@ -87,7 +86,7 @@ static inline uint64_t sanitize_uprobe_offset(uint64_t raw_offset)
 	return raw_offset;
 }
 #endif
-}
+} /* namespace */
 
 /*
  * Add context on a kernel channel.
