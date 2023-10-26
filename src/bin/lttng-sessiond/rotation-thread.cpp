@@ -44,6 +44,7 @@
 #include <lttng/rotate-internal.hpp>
 #include <lttng/trigger/trigger.h>
 
+#include <fcntl.h>
 #include <inttypes.h>
 #include <memory>
 #include <signal.h>
@@ -69,7 +70,7 @@ namespace {
 struct rotation_thread_job {
 	using uptr = std::unique_ptr<
 		rotation_thread_job,
-		lttng::details::create_unique_class<rotation_thread_job, lttng::free>>;
+		lttng::memory::create_deleter_class<rotation_thread_job, lttng::free>::deleter>;
 
 	enum ls::rotation_thread_job_type type;
 	struct ltt_session *session;
@@ -395,8 +396,8 @@ void ls::rotation_thread_timer_queue_destroy(struct rotation_thread_timer_queue 
 
 ls::rotation_thread::rotation_thread(rotation_thread_timer_queue& rotation_timer_queue,
 				     notification_thread_handle& notification_thread_handle) :
-	_rotation_timer_queue{ rotation_timer_queue },
-	_notification_thread_handle{ notification_thread_handle }
+	_rotation_timer_queue(rotation_timer_queue),
+	_notification_thread_handle(notification_thread_handle)
 {
 	_quit_pipe.reset([]() {
 		auto raw_pipe = lttng_pipe_open(FD_CLOEXEC);
@@ -751,8 +752,8 @@ void ls::rotation_thread::_run()
 			DBG_FMT("Handling descriptor activity: fd={}, events={:b}", fd, revents);
 
 			if (revents & LPOLLERR) {
-				LTTNG_THROW_ERROR(
-					fmt::format("Polling returned an error on fd: fd={}", fd));
+				LTTNG_THROW_ERROR(lttng::format(
+					"Polling returned an error on fd: fd={}", fd));
 			}
 
 			if (fd == _notification_channel->socket ||
@@ -788,7 +789,7 @@ void ls::rotation_thread::_run()
 
 					if (lttng_read(fd, &buf, 1) != 1) {
 						LTTNG_THROW_POSIX(
-							fmt::format(
+							lttng::format(
 								"Failed to read from wakeup pipe: fd={}",
 								fd),
 							errno);
@@ -848,14 +849,14 @@ void ls::rotation_thread::subscribe_session_consumed_size_rotation(ltt_session& 
 	auto condition_status =
 		lttng_condition_session_consumed_size_set_threshold(rotate_condition.get(), size);
 	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
-		LTTNG_THROW_ERROR(fmt::format(
+		LTTNG_THROW_ERROR(lttng::format(
 			"Could not set session consumed size condition threshold: size={}", size));
 	}
 
 	condition_status = lttng_condition_session_consumed_size_set_session_name(
 		rotate_condition.get(), session.name);
 	if (condition_status != LTTNG_CONDITION_STATUS_OK) {
-		LTTNG_THROW_ERROR(fmt::format(
+		LTTNG_THROW_ERROR(lttng::format(
 			"Could not set session consumed size condition session name: name=`{}`",
 			session.name));
 	}
@@ -894,7 +895,7 @@ void ls::rotation_thread::subscribe_session_consumed_size_rotation(ltt_session& 
 		&_notification_thread_handle, trigger.get(), true);
 	if (register_ret != LTTNG_OK) {
 		LTTNG_THROW_CTL(
-			fmt::format(
+			lttng::format(
 				"Failed to register trigger for automatic size-based rotation: session_name{}, size={}",
 				session.name,
 				size),
@@ -918,7 +919,7 @@ void ls::rotation_thread::unsubscribe_session_consumed_size_rotation(ltt_session
 		_notification_channel.get(),
 		lttng_trigger_get_const_condition(session.rotate_trigger));
 	if (unsubscribe_status != LTTNG_NOTIFICATION_CHANNEL_STATUS_OK) {
-		LTTNG_THROW_ERROR(fmt::format(
+		LTTNG_THROW_ERROR(lttng::format(
 			"Failed to unsubscribe from consumed size condition used to control automatic size-based rotations: session_name=`{}` return_code={}",
 			session.name,
 			static_cast<int>(unsubscribe_status)));
@@ -934,7 +935,7 @@ void ls::rotation_thread::unsubscribe_session_consumed_size_rotation(ltt_session
 		&_notification_thread_handle, session.rotate_trigger);
 	if (unregister_status != LTTNG_OK) {
 		LTTNG_THROW_CTL(
-			fmt::format(
+			lttng::format(
 				"Failed to unregister trigger for automatic size-based rotation: session_name{}",
 				session.name),
 			unregister_status);

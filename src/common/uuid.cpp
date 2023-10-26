@@ -27,7 +27,7 @@ bool lttng_uuid_is_init;
 
 void lttng_uuid_to_str(const lttng_uuid& uuid, char *uuid_str)
 {
-	sprintf(uuid_str, LTTNG_UUID_FMT, LTTNG_UUID_FMT_VALUES(uuid));
+	snprintf(uuid_str, LTTNG_UUID_STR_LEN, LTTNG_UUID_FMT, LTTNG_UUID_FMT_VALUES(uuid));
 }
 
 std::string lttng::utils::uuid_to_str(const lttng_uuid& uuid)
@@ -83,7 +83,7 @@ int lttng_uuid_generate(lttng_uuid& uuid_out)
 	if (!lttng_uuid_is_init) {
 		try {
 			srand(lttng::random::produce_best_effort_random_seed());
-		} catch (std::exception& e) {
+		} catch (const std::exception& e) {
 			ERR("Failed to initialize random seed during generation of UUID: %s",
 			    e.what());
 			ret = -1;

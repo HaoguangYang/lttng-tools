@@ -63,6 +63,7 @@ libcommon_lgpl_la_SOURCES = \
 	conditions/event-rule-matches.cpp \
 	conditions/session-consumed-size.cpp \
 	conditions/session-rotation.cpp \
+	container-wrapper.hpp \
 	credentials.cpp credentials.hpp \
 	defaults.cpp \
 	domain.cpp \
@@ -73,7 +74,6 @@ libcommon_lgpl_la_SOURCES = \
 	error-query.cpp \
 	evaluation.cpp \
 	event.cpp \
-	eventfd.hpp eventfd.cpp \
 	event-expr/event-expr.cpp \
 	event-field-value.cpp \
 	event-rule/event-rule.cpp \
@@ -87,8 +87,10 @@ libcommon_lgpl_la_SOURCES = \
 	event-rule/python-logging.cpp \
 	exception.cpp exception.hpp \
 	file-descriptor.hpp file-descriptor.cpp \
-	fd-handle.cpp fd-handle.hpp\
+	fd-handle.cpp fd-handle.hpp \
 	format.hpp \
+	io-hint.cpp \
+	io-hint.hpp \
 	kernel-probe.cpp \
 	location.cpp \
 	locked-reference.hpp \
@@ -117,6 +119,10 @@ libcommon_lgpl_la_SOURCES = \
 	userspace-probe.cpp \
 	urcu.hpp \
 	utils.cpp utils.hpp
+
+if IS_LINUX
+libcommon_lgpl_la_SOURCES += eventfd.cpp eventfd.hpp
+endif
 
 if HAVE_ELF_H
 libcommon_lgpl_la_SOURCES += \
@@ -169,13 +175,11 @@ libcommon_gpl_la_LIBADD = \
 # libcompat
 noinst_LTLIBRARIES += libcompat.la
 libcompat_la_SOURCES = \
-        compat/compat-fcntl.cpp \
         compat/directory-handle.cpp \
         compat/directory-handle.hpp \
         compat/dirent.hpp \
         compat/endian.hpp \
         compat/errno.hpp \
-        compat/fcntl.hpp \
         compat/getenv.hpp \
         compat/mman.hpp \
         compat/netdb.hpp \

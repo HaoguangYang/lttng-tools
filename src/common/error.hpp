@@ -46,8 +46,8 @@ struct log_time {
 	/* Format: 00:00:00.000000000 plus NULL byte. */
 	char str[19];
 };
-extern LTTNG_EXPORT DECLARE_URCU_TLS(struct log_time, error_log_time);
-extern DECLARE_URCU_TLS(const char *, logger_thread_name);
+
+extern thread_local const char *logger_thread_name;
 
 extern int lttng_opt_quiet;
 extern int lttng_opt_verbose;
@@ -160,7 +160,7 @@ static inline void __lttng_print_check_abort(enum lttng_error_level type)
 				      msg " - %s [%s]: " fmt " (in %s() at " __FILE__     \
 					  ":" XSTR(__LINE__) ")\n",                       \
 				      log_add_time(),                                     \
-				      URCU_TLS(logger_thread_name) ?: generic_name,       \
+				      logger_thread_name ?: generic_name,                 \
 				      ##args,                                             \
 				      __func__);                                          \
 		}                                                                         \
@@ -180,7 +180,7 @@ static inline void __lttng_print_check_abort(enum lttng_error_level type)
 			__lttng_print(type,                                               \
 				      msg " - %s [%s]: " fmt "\n",                        \
 				      log_add_time(),                                     \
-				      URCU_TLS(logger_thread_name) ?: generic_name,       \
+				      logger_thread_name ?: generic_name,                 \
 				      ##args);                                            \
 		}                                                                         \
 	} while (0)
@@ -252,11 +252,46 @@ static inline void __lttng_print_check_abort(enum lttng_error_level type)
 	} while (0);
 #endif
 
-#define DBG_FMT(format_str, args...)  DBG("%s", fmt::format(format_str, ##args).c_str())
-#define WARN_FMT(format_str, args...) WARN("%s", fmt::format(format_str, ##args).c_str())
-#define ERR_FMT(format_str, args...)  ERR("%s", fmt::format(format_str, ##args).c_str())
-
 const char *error_get_str(int32_t code);
+
+namespace lttng {
+namespace logging {
+namespace details {
+[[noreturn]] void die_formatting_exception(const char *format,
+					   const std::exception& formatting_exception);
+} /* namespace details */
+} /* namespace logging */
+} /* namespace lttng */
+
+#define DBG_FMT(format_str, args...)                                                              \
+	do {                                                                                      \
+		try {                                                                             \
+			DBG("%s", lttng::format(format_str, ##args).c_str());                     \
+		} catch (const std::exception& _formatting_exception) {                           \
+			lttng::logging::details::die_formatting_exception(format_str,             \
+									  _formatting_exception); \
+		}                                                                                 \
+	} while (0);
+
+#define WARN_FMT(format_str, args...)                                                             \
+	do {                                                                                      \
+		try {                                                                             \
+			WARN("%s", lttng::format(format_str, ##args).c_str());                    \
+		} catch (const std::exception& _formatting_exception) {                           \
+			lttng::logging::details::die_formatting_exception(format_str,             \
+									  _formatting_exception); \
+		}                                                                                 \
+	} while (0);
+
+#define ERR_FMT(format_str, args...)                                                              \
+	do {                                                                                      \
+		try {                                                                             \
+			ERR("%s", lttng::format(format_str, ##args).c_str());                     \
+		} catch (const std::exception& _formatting_exception) {                           \
+			lttng::logging::details::die_formatting_exception(format_str,             \
+									  _formatting_exception); \
+		}                                                                                 \
+	} while (0);
 
 /*
  * Function that format the time and return the reference of log_time.str to

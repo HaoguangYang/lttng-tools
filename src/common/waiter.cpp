@@ -7,16 +7,16 @@
  */
 
 #include "error.hpp"
+#include "macros.hpp"
 #include "waiter.hpp"
 
 #include <poll.h>
 #include <urcu/futex.h>
 #include <urcu/uatomic.h>
 
-/*
- * Number of busy-loop attempts before waiting on futex.
- */
-#define WAIT_ATTEMPTS 1000
+namespace {
+/* Number of busy-loop attempts before waiting on futex. */
+constexpr auto wait_attempt_count = 1000;
 
 enum waiter_state {
 	/* WAITER_WAITING is compared directly (futex compares it). */
@@ -26,33 +26,40 @@ enum waiter_state {
 	WAITER_RUNNING = (1 << 1),
 	WAITER_TEARDOWN = (1 << 2),
 };
+} /* namespace */
 
-void lttng_waiter_init(struct lttng_waiter *waiter)
+lttng::synchro::waiter::waiter()
 {
-	cds_wfs_node_init(&waiter->wait_queue_node);
-	uatomic_set(&waiter->state, WAITER_WAITING);
+	arm();
+}
+
+void lttng::synchro::waiter::arm() noexcept
+{
+	cds_wfs_node_init(&_wait_queue_node);
+	uatomic_set(&_state, WAITER_WAITING);
 	cmm_smp_mb();
 }
 
 /*
- * User must init "waiter" before passing its memory to waker thread.
+ * User must arm "waiter" before passing its memory to waker thread.
  */
-void lttng_waiter_wait(struct lttng_waiter *waiter)
+void lttng::synchro::waiter::wait()
 {
-	unsigned int i;
+	DBG("Beginning of waiter \"wait\" period");
 
-	DBG("Beginning of waiter wait period");
-	/* Load and test condition before read state */
+	/* Load and test condition before read state. */
 	cmm_smp_rmb();
-	for (i = 0; i < WAIT_ATTEMPTS; i++) {
-		if (uatomic_read(&waiter->state) != WAITER_WAITING) {
+	for (unsigned int i = 0; i < wait_attempt_count; i++) {
+		if (uatomic_read(&_state) != WAITER_WAITING) {
 			goto skip_futex_wait;
 		}
+
 		caa_cpu_relax();
 	}
-	while (uatomic_read(&waiter->state) == WAITER_WAITING) {
+
+	while (uatomic_read(&_state) == WAITER_WAITING) {
 		if (!futex_noasync(
-			    &waiter->state, FUTEX_WAIT, WAITER_WAITING, nullptr, nullptr, 0)) {
+			    &_state, FUTEX_WAIT, WAITER_WAITING, nullptr, nullptr, 0)) {
 			/*
 			 * Prior queued wakeups queued by unrelated code
 			 * using the same address can cause futex wait to
@@ -63,6 +70,7 @@ void lttng_waiter_wait(struct lttng_waiter *waiter)
 			 */
 			continue;
 		}
+
 		switch (errno) {
 		case EAGAIN:
 			/* Value already changed. */
@@ -79,23 +87,31 @@ void lttng_waiter_wait(struct lttng_waiter *waiter)
 skip_futex_wait:
 
 	/* Tell waker thread than we are running. */
-	uatomic_or(&waiter->state, WAITER_RUNNING);
+	uatomic_or(&_state, WAITER_RUNNING);
 
 	/*
 	 * Wait until waker thread lets us know it's ok to tear down
 	 * memory allocated for struct lttng_waiter.
 	 */
-	for (i = 0; i < WAIT_ATTEMPTS; i++) {
-		if (uatomic_read(&waiter->state) & WAITER_TEARDOWN) {
+	for (unsigned int i = 0; i < wait_attempt_count; i++) {
+		if (uatomic_read(&_state) & WAITER_TEARDOWN) {
 			break;
 		}
+
 		caa_cpu_relax();
 	}
-	while (!(uatomic_read(&waiter->state) & WAITER_TEARDOWN)) {
+
+	while (!(uatomic_read(&_state) & WAITER_TEARDOWN)) {
 		poll(nullptr, 0, 10);
 	}
-	LTTNG_ASSERT(uatomic_read(&waiter->state) & WAITER_TEARDOWN);
-	DBG("End of waiter wait period");
+
+	LTTNG_ASSERT(uatomic_read(&_state) & WAITER_TEARDOWN);
+	DBG("End of waiter \"wait\" period");
+}
+
+lttng::synchro::waker lttng::synchro::waiter::get_waker()
+{
+	return lttng::synchro::waker(_state);
 }
 
 /*
@@ -103,17 +119,50 @@ skip_futex_wait:
  * execution. In this scheme, the waiter owns the node memory, and we only allow
  * it to free this memory when it sees the WAITER_TEARDOWN flag.
  */
-void lttng_waiter_wake_up(struct lttng_waiter *waiter)
+void lttng::synchro::waker::wake()
 {
 	cmm_smp_mb();
-	LTTNG_ASSERT(uatomic_read(&waiter->state) == WAITER_WAITING);
-	uatomic_set(&waiter->state, WAITER_WOKEN_UP);
-	if (!(uatomic_read(&waiter->state) & WAITER_RUNNING)) {
-		if (futex_noasync(&waiter->state, FUTEX_WAKE, 1, nullptr, nullptr, 0) < 0) {
+
+	LTTNG_ASSERT(uatomic_read(&_state) == WAITER_WAITING);
+
+	uatomic_set(&_state, WAITER_WOKEN_UP);
+	if (!(uatomic_read(&_state) & WAITER_RUNNING)) {
+		if (futex_noasync(&_state, FUTEX_WAKE, 1, nullptr, nullptr, 0) < 0) {
 			PERROR("futex_noasync");
 			abort();
 		}
 	}
+
 	/* Allow teardown of struct urcu_wait memory. */
-	uatomic_or(&waiter->state, WAITER_TEARDOWN);
+	uatomic_or(&_state, WAITER_TEARDOWN);
+}
+
+lttng::synchro::wait_queue::wait_queue()
+{
+	cds_wfs_init(&_stack);
+}
+
+void lttng::synchro::wait_queue::add(waiter &waiter) noexcept
+{
+	(void) cds_wfs_push(&_stack, &waiter._wait_queue_node);
+}
+
+void lttng::synchro::wait_queue::wake_all()
+{
+	/* Move all waiters from the queue to our local stack. */
+	auto *waiters = __cds_wfs_pop_all(&_stack);
+
+	/* Wake all waiters in our stack head. */
+	cds_wfs_node *iter, *iter_n;
+	cds_wfs_for_each_blocking_safe(waiters, iter, iter_n) {
+		auto& waiter = *lttng::utils::container_of(
+			iter, &lttng::synchro::waiter::_wait_queue_node);
+
+		/* Don't wake already running threads. */
+		if (waiter._state & WAITER_RUNNING) {
+			continue;
+		}
+
+		waiter.get_waker().wake();
+	}
 }

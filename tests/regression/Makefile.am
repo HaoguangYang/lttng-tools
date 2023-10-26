@@ -64,7 +64,10 @@ TESTS = tools/base-path/test_ust \
 	tools/trigger/test_remove_trigger_cli \
 	tools/trigger/name/test_trigger_name_backwards_compat \
 	tools/trigger/hidden/test_hidden_trigger \
-	tools/context/test_ust.py
+	tools/context/test_ust.py \
+	tools/client/test_session_commands.py \
+	tools/client/test_event_rule_listing.py \
+	tools/client/test_bug1373_events_differ_only_by_loglevel
 
 # Only build kernel tests on Linux.
 if IS_LINUX
@@ -87,6 +90,7 @@ TESTS += ust/before-after/test_before_after \
 	ust/blocking/test_blocking \
 	ust/multi-lib/test_multi_lib \
 	ust/rotation-destroy-flush/test_rotation_destroy_flush \
+	ust/ust-constructor/test_ust_constructor.py \
 	tools/metadata/test_ust \
 	tools/relayd-grouping/test_ust \
 	tools/trigger/rate-policy/test_ust_rate_policy

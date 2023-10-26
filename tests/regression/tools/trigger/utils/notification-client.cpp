@@ -7,6 +7,9 @@
 
 #include "utils.h"
 
+#include <common/error.hpp>
+
+#include <lttng/action/list-internal.hpp>
 #include <lttng/condition/event-rule-matches.h>
 #include <lttng/lttng.h>
 
@@ -37,22 +40,12 @@ static struct option long_options[] = {
 
 static bool action_list_contains_notify(const struct lttng_action *action_list)
 {
-	unsigned int i, count;
-	enum lttng_action_status status = lttng_action_list_get_count(action_list, &count);
-
-	if (status != LTTNG_ACTION_STATUS_OK) {
-		printf("Failed to get action count from action list\n");
-		exit(1);
-	}
-
-	for (i = 0; i < count; i++) {
-		const struct lttng_action *action = lttng_action_list_get_at_index(action_list, i);
-		const enum lttng_action_type action_type = lttng_action_get_type(action);
-
-		if (action_type == LTTNG_ACTION_TYPE_NOTIFY) {
+	for (auto sub_action : lttng::ctl::const_action_list_view(action_list)) {
+		if (lttng_action_get_type(sub_action) == LTTNG_ACTION_TYPE_NOTIFY) {
 			return true;
 		}
 	}
+
 	return false;
 }
 
@@ -90,7 +83,7 @@ end:
 	return names_match;
 }
 
-int main(int argc, char **argv)
+static int _main(int argc, char **argv)
 {
 	int ret;
 	int option;
@@ -287,4 +280,14 @@ end:
 	free(end_trigger_name);
 	free(expected_trigger_name);
 	return !!ret;
+}
+
+int main(int argc, char **argv)
+{
+	try {
+		return _main(argc, argv);
+	} catch (const std::exception& e) {
+		ERR_FMT("Unhandled exception caught by notification client: %s", e.what());
+		abort();
+	}
 }

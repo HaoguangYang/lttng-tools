@@ -484,14 +484,22 @@ static enum lttng_error_code list_lttng_ust_global_events(char *channel_name,
 			tmp_event->exclusion = 1;
 		}
 
+		std::vector<const char *> exclusion_names;
+		if (uevent->exclusion) {
+			for (int i = 0; i < uevent->exclusion->count; i++) {
+				exclusion_names.emplace_back(
+					LTTNG_EVENT_EXCLUSION_NAME_AT(uevent->exclusion, i));
+			}
+		}
+
 		/*
 		 * We do not care about the filter bytecode and the fd from the
 		 * userspace_probe_location.
 		 */
 		ret = lttng_event_serialize(tmp_event,
-					    uevent->exclusion ? uevent->exclusion->count : 0,
-					    uevent->exclusion ? (char **) uevent->exclusion->names :
-								nullptr,
+					    exclusion_names.size(),
+					    exclusion_names.size() ? exclusion_names.data() :
+								     nullptr,
 					    uevent->filter_expression,
 					    0,
 					    nullptr,
@@ -2087,8 +2095,6 @@ static int _cmd_enable_event(struct ltt_session *session,
 		}
 	}
 
-	DBG("Enable event command for event \'%s\'", event->name);
-
 	lttng::urcu::read_lock_guard read_lock;
 
 	switch (domain->type) {
@@ -2330,6 +2336,7 @@ static int _cmd_enable_event(struct ltt_session *session,
 		memset(&uevent, 0, sizeof(uevent));
 		uevent.type = LTTNG_EVENT_TRACEPOINT;
 		uevent.loglevel_type = LTTNG_EVENT_LOGLEVEL_ALL;
+		uevent.loglevel = -1;
 		default_event_name = event_get_default_agent_ust_name(domain->type);
 		if (!default_event_name) {
 			ret = LTTNG_ERR_FATAL;
@@ -3435,7 +3442,7 @@ int cmd_destroy_session(struct ltt_session *session, int *sock_fd)
 		try {
 			the_rotation_thread_handle->unsubscribe_session_consumed_size_rotation(
 				*session);
-		} catch (std::exception& e) {
+		} catch (const std::exception& e) {
 			/* Continue the destruction of the session anyway. */
 			ERR("Failed to unsubscribe rotation thread notification channel from consumed size condition during session destruction: %s",
 			    e.what());
@@ -4468,6 +4475,8 @@ synchronize_tracer_notifier_register(struct notification_thread_handle *notifica
 				    (int) trigger_owner,
 				    ret_code);
 			}
+
+			goto end_unlock_session_list;
 		}
 		break;
 	}
@@ -5896,7 +5905,7 @@ int cmd_rotation_set_schedule(struct ltt_session *session,
 			try {
 				the_rotation_thread_handle->subscribe_session_consumed_size_rotation(
 					*session, new_value);
-			} catch (std::exception& e) {
+			} catch (const std::exception& e) {
 				ERR("Failed to enable consumed-size notification in ROTATION_SET_SCHEDULE command: %s",
 				    e.what());
 				ret = LTTNG_ERR_UNK;
@@ -5906,7 +5915,7 @@ int cmd_rotation_set_schedule(struct ltt_session *session,
 			try {
 				the_rotation_thread_handle
 					->unsubscribe_session_consumed_size_rotation(*session);
-			} catch (std::exception& e) {
+			} catch (const std::exception& e) {
 				ERR("Failed to disable consumed-size notification in ROTATION_SET_SCHEDULE command: %s",
 				    e.what());
 				ret = LTTNG_ERR_UNK;

@@ -315,7 +315,8 @@ AC_CHECK_FUNCS([ \
 	mkdir munmap putenv realpath rmdir socket strchr strcspn strdup \
 	strncasecmp strndup strnlen strpbrk strrchr strstr strtol strtoul \
 	strtoull dirfd gethostbyname2 getipnodebyname epoll_create1 \
-	sched_getcpu sysconf sync_file_range getrandom
+	sched_getcpu sysconf sync_file_range getrandom posix_fadvise \
+	arc4random
 ])
 
 # Check for pthread_setname_np and pthread_getname_np
@@ -1240,6 +1241,7 @@ AC_CONFIG_FILES([
 	tests/regression/tools/trigger/name/Makefile
 	tests/regression/tools/trigger/hidden/Makefile
 	tests/regression/tools/context/Makefile
+	tests/regression/tools/client/Makefile
 	tests/regression/ust/Makefile
 	tests/regression/ust/nprocesses/Makefile
 	tests/regression/ust/high-throughput/Makefile
@@ -1267,6 +1269,7 @@ AC_CONFIG_FILES([
 	tests/regression/ust/rotation-destroy-flush/Makefile
 	tests/regression/ust/blocking/Makefile
 	tests/regression/ust/namespaces/Makefile
+	tests/regression/ust/ust-constructor/Makefile
 	tests/stress/Makefile
 	tests/unit/Makefile
 	tests/unit/ini_config/Makefile
@@ -1279,6 +1282,7 @@ AC_CONFIG_FILES([
 	tests/utils/testapp/gen-kernel-test-events/Makefile
 	tests/utils/testapp/gen-py-events/Makefile
 	tests/utils/testapp/gen-ust-events/Makefile
+	tests/utils/testapp/gen-ust-events-constructor/Makefile
 	tests/utils/testapp/gen-ust-events-ns/Makefile
 	tests/utils/testapp/gen-syscall-events-callstack/Makefile
 	tests/utils/testapp/gen-ust-nevents/Makefile

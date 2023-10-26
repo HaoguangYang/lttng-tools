@@ -18,20 +18,89 @@
 #include <stdint.h>
 #include <urcu/wfstack.h>
 
-struct lttng_waiter {
-	struct cds_wfs_node wait_queue_node;
-	int32_t state;
+namespace lttng {
+namespace synchro {
+class waiter;
+class wait_queue;
+
+class waker {
+	friend waiter;
+
+public:
+	waker(const waker&) = default;
+	waker(waker&&) = default;
+	waker& operator=(const waker& other)
+	{
+		_state = other._state;
+		return *this;
+	}
+	waker& operator=(waker&& other)
+	{
+		_state = other._state;
+		return *this;
+	}
+
+	void wake();
+
+	~waker() = default;
+
+private:
+	waker(int32_t& state) : _state{ state }
+	{
+	}
+
+	int32_t& _state;
 };
 
-void lttng_waiter_init(struct lttng_waiter *waiter);
+class waiter final {
+	friend wait_queue;
 
-void lttng_waiter_wait(struct lttng_waiter *waiter);
+public:
+	waiter();
 
-/*
- * lttng_waiter_wake_up must only be called by a single waker.
- * It is invalid for multiple "wake" operations to be invoked
- * on a single waiter without re-initializing it before.
- */
-void lttng_waiter_wake_up(struct lttng_waiter *waiter);
+	/* Deactivate copy and assignment. */
+	waiter(const waiter&) = delete;
+	waiter(waiter&&) = delete;
+	waiter& operator=(const waiter&) = delete;
+	waiter& operator=(waiter&&) = delete;
+	~waiter() = default;
+
+	void arm() noexcept;
+	void wait();
+
+	waker get_waker();
+
+private:
+	cds_wfs_node _wait_queue_node;
+	int32_t _state;
+};
+
+class wait_queue final {
+public:
+	wait_queue();
+
+	/* Deactivate copy and assignment. */
+	wait_queue(const wait_queue&) = delete;
+	wait_queue(wait_queue&&) = delete;
+	wait_queue& operator=(const wait_queue&) = delete;
+	wait_queue& operator=(wait_queue&&) = delete;
+	~wait_queue() = default;
+
+	/*
+	 * Atomically add a waiter to a wait queue.
+	 * A full memory barrier is issued before being added to the wait queue.
+	 */
+	void add(waiter& waiter) noexcept;
+	/*
+	 * Wake every waiter present in the wait queue and remove them from
+	 * the queue.
+	 */
+	void wake_all();
+
+private:
+	cds_wfs_stack _stack;
+};
+} /* namespace synchro */
+} /* namespace lttng */
 
 #endif /* LTTNG_WAITER_H */
